@@ -7,18 +7,16 @@ import React, { useEffect, useState } from 'react';
 import {
   User,
   ShieldCheck,
-  Key,
   Download,
   Trash2,
   LogOut,
   CheckCircle2,
   AlertTriangle,
-  Copy,
-  Check,
   Loader2,
   FileJson,
   Shield,
   Sparkles,
+  Lock,
 } from 'lucide-react';
 import type { UserProfileResponse } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -30,7 +28,6 @@ export const ProfileSettingsScreen: React.FC = () => {
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'account' | 'technical'>('account');
-  const [copiedToken, setCopiedToken] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false);
@@ -72,13 +69,6 @@ export const ProfileSettingsScreen: React.FC = () => {
       isMounted = false;
     };
   }, [user]);
-
-  const handleCopyToken = () => {
-    if (!user?.idToken) return;
-    navigator.clipboard.writeText(user.idToken);
-    setCopiedToken(true);
-    setTimeout(() => setCopiedToken(false), 2000);
-  };
 
   const handleExportData = async () => {
     if (!user) return;
@@ -313,76 +303,29 @@ export const ProfileSettingsScreen: React.FC = () => {
       {activeTab === 'technical' && (
         <div className="space-y-6">
           <div className="bg-[#FAF6F0] border border-[#EDE2D0] rounded-3xl p-5 sm:p-6 text-xs text-[#6B5026]">
-            <p className="font-serif text-sm text-[#1C1917] mb-1">Architecture & Security Verification</p>
+            <p className="font-serif text-sm text-[#1C1917] mb-1">Privacy & Security Safeguards</p>
             <p className="text-[#78613A] font-light leading-relaxed">
-              This inspection panel provides transparency into the Zero-Trust multi-tenant isolation, verified Firebase bearer tokens, and automated test suite results.
+              Your journal is designed with private-by-default security. Only you can read, write, or export your personal reflections.
             </p>
           </div>
 
-          {/* Account Identifier */}
-          <div className="bg-white rounded-3xl border border-[#EAE5DC] p-6 sm:p-8 shadow-2xs space-y-4">
-            <h3 className="text-sm font-serif font-normal text-[#1C1917]">
-              Identity Claims & Storage Hierarchy
-            </h3>
-            <div className="space-y-3 text-xs">
-              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#EAE5DC]">
-                <span className="text-[#8C857B] block mb-1 text-[10px] uppercase tracking-wider">Authenticated UID</span>
-                <span className="font-mono text-[#1C1917] font-medium break-all">
-                  {user?.uid}
-                </span>
-              </div>
-              <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#EAE5DC]">
-                <span className="text-[#8C857B] block mb-1 text-[10px] uppercase tracking-wider">Firestore Partition Path</span>
-                <span className="font-mono text-[#57534E] text-[11px]">
-                  users/{user?.uid}/sessions/{'{sessionId}'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Bearer Token */}
-          <div className="bg-white rounded-3xl border border-[#EAE5DC] p-6 sm:p-8 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-serif font-normal text-[#1C1917] flex items-center gap-2">
-                <Key className="w-4 h-4 text-[#A87B32]" />
-                <span>Active Authorization Token</span>
-              </h3>
-
-              <button
-                onClick={handleCopyToken}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-[#EAE5DC] hover:bg-[#FAF8F5] text-xs font-medium text-[#57534E] transition cursor-pointer"
-              >
-                {copiedToken ? <Check className="w-3.5 h-3.5 text-[#4E775B]" /> : <Copy className="w-3.5 h-3.5 text-[#8C857B]" />}
-                <span>{copiedToken ? 'Copied' : 'Copy Token'}</span>
-              </button>
-            </div>
-
-            <p className="text-xs text-[#78716C] font-light leading-relaxed">
-              Client requests include this ID token in the <code className="bg-[#FAF8F5] px-1.5 py-0.5 rounded font-mono text-[11px] text-[#1C1917] border border-[#EAE5DC]">Authorization: Bearer</code> header. The server derives UID strictly from verified claims.
-            </p>
-
-            <div className="p-4 rounded-2xl bg-[#1C1917] font-mono text-[#EBD8B8] text-xs break-all select-all max-h-24 overflow-y-auto leading-relaxed">
-              {user?.idToken}
-            </div>
-          </div>
-
-          {/* Gemini AI Key Status & Direct Setup */}
+          {/* Gemini AI Key Setup */}
           <div className="bg-white rounded-3xl border border-[#EAE5DC] p-6 sm:p-8 shadow-2xs space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-serif font-normal text-[#1C1917] flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-[#A87B32]" />
-                <span>Gemini AI Engine Integration</span>
+                <span>Gemini AI Connection</span>
               </h3>
             </div>
 
             <p className="text-xs text-[#78716C] font-light leading-relaxed">
-              When deployed purely on static Firebase Hosting, provide your Gemini API key (or set <code className="bg-[#FAF8F5] px-1.5 py-0.5 rounded font-mono text-[11px] text-[#1C1917] border border-[#EAE5DC]">VITE_GEMINI_API_KEY</code> in build env) for real-time AI conversation and entry synthesis.
+              Add your Google Gemini API key to enable real-time reflective guidance and automatic entry summarization.
             </p>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="password"
-                placeholder="Enter your Gemini API key (AIzaSy...)"
+                placeholder="Paste Gemini API key (AIzaSy...)"
                 defaultValue={typeof localStorage !== 'undefined' ? localStorage.getItem('gemini_api_key_custom') || '' : ''}
                 onChange={(e) => {
                   const val = e.target.value.trim();
@@ -395,44 +338,40 @@ export const ProfileSettingsScreen: React.FC = () => {
               />
               <button
                 onClick={() => {
-                  setActionNotice({ type: 'success', message: 'Gemini API key configured. Real Gemini model responses are now active.' });
+                  setActionNotice({ type: 'success', message: 'Gemini API key saved. Live Gemini reflections are active.' });
                 }}
-                className="px-4 py-2.5 rounded-xl bg-[#1C1917] text-[#FAF8F5] text-xs font-medium hover:bg-[#2B2724] transition cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-[#1C1917] text-[#FAF8F5] text-xs font-medium hover:bg-[#2B2724] transition cursor-pointer"
               >
                 Save Key
               </button>
             </div>
           </div>
 
-          {/* Security Verification Matrix */}
+          {/* Security & Data Protection Guarantees */}
           <div className="bg-white rounded-3xl border border-[#EAE5DC] p-6 sm:p-8 shadow-2xs space-y-4">
             <h3 className="text-sm font-serif font-normal text-[#1C1917] flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-[#4E775B]" />
-              <span>Automated Security Test Suite Verification</span>
+              <span>Data Protection Guarantees</span>
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-              <div className="p-5 rounded-2xl bg-[#EBF2ED] border border-[#D5E3D8] space-y-2">
-                <div className="flex items-center justify-between text-[#284932] font-medium">
-                  <span className="font-serif text-sm">Firestore Rules Unit Suite</span>
-                  <span className="bg-[#D5E3D8] text-[#284932] px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold">
-                    30 / 30 PASS
-                  </span>
+              <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#EAE5DC] space-y-2">
+                <div className="flex items-center gap-2 text-[#1C1917] font-medium">
+                  <Lock className="w-4 h-4 text-[#4E775B]" />
+                  <span className="font-serif text-sm">Strict Account Isolation</span>
                 </div>
-                <p className="text-[#3A5D44] text-[11px] font-light leading-relaxed">
-                  Validates unauthenticated rejection, owner read/write enforcement, cross-tenant denials, and UID immutability.
+                <p className="text-[#78716C] text-xs font-light leading-relaxed">
+                  Your journal entries and insights are strictly tied to your account. No other user can access or view your writings.
                 </p>
               </div>
 
-              <div className="p-5 rounded-2xl bg-[#EBF2ED] border border-[#D5E3D8] space-y-2">
-                <div className="flex items-center justify-between text-[#284932] font-medium">
-                  <span className="font-serif text-sm">Backend API Security Suite</span>
-                  <span className="bg-[#D5E3D8] text-[#284932] px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold">
-                    11 / 11 PASS
-                  </span>
+              <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#EAE5DC] space-y-2">
+                <div className="flex items-center gap-2 text-[#1C1917] font-medium">
+                  <Shield className="w-4 h-4 text-[#4E775B]" />
+                  <span className="font-serif text-sm">Zero Data Selling</span>
                 </div>
-                <p className="text-[#3A5D44] text-[11px] font-light leading-relaxed">
-                  Validates server-side UID token extraction, Zod schema validation, multi-tier Gemini model fallback, and tenant isolation.
+                <p className="text-[#78716C] text-xs font-light leading-relaxed">
+                  Your personal entries are private to you. You can export a full copy of your journal or permanently delete it at any time.
                 </p>
               </div>
             </div>
