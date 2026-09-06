@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Personal Gemini Journal",
+  "description": "A production-grade, privacy-first personal journal with Firebase Authentication, Cloud Firestore, server-side Gemini RAG integration, and an Insights Dashboard.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
