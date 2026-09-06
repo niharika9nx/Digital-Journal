@@ -1,1 +1,60 @@
 @import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-serif: 'DM Serif Display', 'Playfair Display', Georgia, serif;
+    --font-editorial: 'Newsreader', Georgia, serif;
+    --font-sans: 'Plus Jakarta Sans', 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #FAF8F5;
+    color: #1C1917;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, .font-serif {
+    font-family: var(--font-serif);
+  }
+
+  .font-editorial {
+    font-family: var(--font-editorial);
+  }
+
+  .font-sans {
+    font-family: var(--font-sans);
+  }
+}
+
+/* Subtle luxury paper texture & background lighting */
+.bg-paper-pattern {
+  background-color: #FAF8F5;
+  background-image: 
+    radial-gradient(at 15% 15%, rgba(245, 238, 226, 0.6) 0px, transparent 50%),
+    radial-gradient(at 85% 85%, rgba(243, 236, 222, 0.4) 0px, transparent 50%);
+}
+
+/* Elegant scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D6D0C4;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B5AEA1;
+}
+
+/* Smooth selection colors */
+::selection {
+  background-color: #EBD8B8;
+  color: #1C1917;
+}

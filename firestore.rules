@@ -1,0 +1,82 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global fail-closed default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Authorization & Authentication Helper Functions
+    function isAuthenticated() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUserCreate(userId) {
+      let data = request.resource.data;
+      return isOwner(userId) && (!('uid' in data) || data.uid == userId);
+    }
+
+    function isValidUserUpdate(userId) {
+      let data = request.resource.data;
+      return isOwner(userId) && (!('uid' in data) || data.uid == resource.data.uid);
+    }
+
+    function isValidSessionCreate(userId, sessionId) {
+      let data = request.resource.data;
+      return isOwner(userId)
+        && (!('uid' in data) || data.uid == userId)
+        && (!('id' in data) || data.id == sessionId);
+    }
+
+    function isValidSessionUpdate(userId) {
+      let data = request.resource.data;
+      return isOwner(userId)
+        && (!('uid' in data) || data.uid == resource.data.uid)
+        && (!('id' in data) || data.id == resource.data.id);
+    }
+
+    function isValidSummaryCreate(userId, summaryId) {
+      let data = request.resource.data;
+      return isOwner(userId)
+        && (!('uid' in data) || data.uid == userId)
+        && (!('id' in data) || data.id == summaryId);
+    }
+
+    function isValidSummaryUpdate(userId) {
+      let data = request.resource.data;
+      return isOwner(userId)
+        && (!('uid' in data) || data.uid == resource.data.uid)
+        && (!('id' in data) || data.id == resource.data.id);
+    }
+
+    // Top-level User Document: /users/{userId}
+    match /users/{userId} {
+      allow get, list: if isOwner(userId);
+      allow create: if isValidUserCreate(userId);
+      allow update: if isValidUserUpdate(userId);
+      allow delete: if isOwner(userId);
+
+      // Nested Resource: /users/{userId}/sessions/{sessionId}
+      match /sessions/{sessionId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isValidSessionCreate(userId, sessionId);
+        allow update: if isValidSessionUpdate(userId);
+        allow delete: if isOwner(userId);
+      }
+
+      // Nested Resource: /users/{userId}/summaries/{summaryId}
+      match /summaries/{summaryId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isValidSummaryCreate(userId, summaryId);
+        allow update: if isValidSummaryUpdate(userId);
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}

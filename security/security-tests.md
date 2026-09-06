@@ -114,3 +114,58 @@
   None required. Security controls functioned as designed.
 * **Retest result:**  
   **PASS** — Re-validated against governance gate enforcement.
+
+---
+
+## Firestore Security Rules & Access Control Verification Suite
+
+**Evaluated Hierarchy:**
+- `/users/{uid}`
+- `/users/{uid}/sessions/{sessionId}`
+- `/users/{uid}/summaries/{summaryId}`
+
+### Test Results Matrix (30 Unit Tests + 11 API End-to-End Tests: 100% Pass)
+
+| Category | Test Case | Target Path / Operation | Expected Result | Actual Result | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Unauthenticated** | Read Profile | `GET /users/alice` | DENY | DENIED | **PASS** |
+| **Unauthenticated** | Write Profile | `CREATE /users/alice` | DENY | DENIED | **PASS** |
+| **Unauthenticated** | Read Session | `GET /users/alice/sessions/s1` | DENY | DENIED | **PASS** |
+| **Unauthenticated** | Write Session | `CREATE /users/alice/sessions/s1` | DENY | DENIED | **PASS** |
+| **Unauthenticated** | Read Summary | `GET /users/alice/summaries/sum1` | DENY | DENIED | **PASS** |
+| **Unauthenticated** | Write Summary | `CREATE /users/alice/summaries/sum1` | DENY | DENIED | **PASS** |
+| **User A -> User A** | Owner Read Profile | `GET /users/alice` (auth: alice) | ALLOW | ALLOWED | **PASS** |
+| **User A -> User A** | Owner Create Profile | `CREATE /users/alice` (auth: alice) | ALLOW | ALLOWED | **PASS** |
+| **User A -> User A** | Owner Read Session | `GET /users/alice/sessions/s1` (auth: alice) | ALLOW | ALLOWED | **PASS** |
+| **User A -> User A** | Owner Create Session | `CREATE /users/alice/sessions/s1` (auth: alice) | ALLOW | ALLOWED | **PASS** |
+| **User A -> User A** | Owner Read Summary | `GET /users/alice/summaries/sum1` (auth: alice) | ALLOW | ALLOWED | **PASS** |
+| **User A -> User A** | Owner Create Summary | `CREATE /users/alice/summaries/sum1` (auth: alice) | ALLOW | ALLOWED | **PASS** |
+| **User A -> User B** | Cross-Tenant Read Profile | `GET /users/bob` (auth: alice) | DENY | DENIED | **PASS** |
+| **User A -> User B** | Cross-Tenant Write Profile | `CREATE /users/bob` (auth: alice) | DENY | DENIED | **PASS** |
+| **User A -> User B** | Cross-Tenant Read Session | `GET /users/bob/sessions/s_bob` (auth: alice) | DENY | DENIED | **PASS** |
+| **User A -> User B** | Cross-Tenant Write Session | `CREATE /users/bob/sessions/s_bob` (auth: alice) | DENY | DENIED | **PASS** |
+| **User A -> User B** | Cross-Tenant Read Summary | `GET /users/bob/summaries/sum_bob` (auth: alice) | DENY | DENIED | **PASS** |
+| **User A -> User B** | Cross-Tenant Write Summary | `CREATE /users/bob/summaries/sum_bob` (auth: alice) | DENY | DENIED | **PASS** |
+| **UID Manipulation** | Profile Payload Spoof | `CREATE /users/alice` with `{ uid: "bob" }` | DENY | DENIED | **PASS** |
+| **UID Manipulation** | Profile Update Mutate UID | `UPDATE /users/alice` mutating `uid` | DENY | DENIED | **PASS** |
+| **UID Manipulation** | Session Payload Spoof | `CREATE /users/alice/sessions/s1` with `{ uid: "bob" }` | DENY | DENIED | **PASS** |
+| **UID Manipulation** | Summary Payload Spoof | `CREATE /users/alice/summaries/sum1` with `{ uid: "bob" }` | DENY | DENIED | **PASS** |
+| **Session Ownership**| Mismatched Doc ID | `CREATE /users/alice/sessions/s1` with `{ id: "s2" }` | DENY | DENIED | **PASS** |
+| **Session Ownership**| Mutate Session UID | `UPDATE /users/alice/sessions/s1` mutating `uid` | DENY | DENIED | **PASS** |
+| **Session Ownership**| Mutate Session ID | `UPDATE /users/alice/sessions/s1` mutating `id` | DENY | DENIED | **PASS** |
+| **Summary Ownership**| Mismatched Doc ID | `CREATE /users/alice/summaries/sum1` with `{ id: "sum2" }` | DENY | DENIED | **PASS** |
+| **Summary Ownership**| Mutate Summary UID | `UPDATE /users/alice/summaries/sum1` mutating `uid` | DENY | DENIED | **PASS** |
+| **Summary Ownership**| Mutate Summary ID | `UPDATE /users/alice/summaries/sum1` mutating `id` | DENY | DENIED | **PASS** |
+| **Default Deny**     | Wildcard Collection | `GET /global_journals/j1` (auth: alice) | DENY | DENIED | **PASS** |
+| **Default Deny**     | Unscoped Analytics | `CREATE /analytics/all` (auth: alice) | DENY | DENIED | **PASS** |
+| **Live API Backend** | Unauth Chat | `POST /api/chat` (no token) | HTTP 401 | HTTP 401 | **PASS** |
+| **Live API Backend** | Unauth Summarize | `POST /api/summarize` (no token) | HTTP 401 | HTTP 401 | **PASS** |
+| **Live API Backend** | Unauth History | `GET /api/history` (no token) | HTTP 401 | HTTP 401 | **PASS** |
+| **Live API Backend** | User A Summarize | `POST /api/summarize` (auth: alice) | HTTP 201 | HTTP 201 | **PASS** |
+| **Live API Backend** | User A History | `GET /api/history` (auth: alice) | HTTP 200 | HTTP 200 | **PASS** |
+| **Live API Backend** | User B Summarize | `POST /api/summarize` (auth: bob) | HTTP 201 | HTTP 201 | **PASS** |
+| **Live API Backend** | User A Isolation | `GET /api/history` (auth: alice excludes Bob) | True | True | **PASS** |
+| **Live API Backend** | Client UID Discard | `POST /api/summarize` with `{ uid: "user-bob" }` | Stripped | Stripped | **PASS** |
+| **Live API Backend** | Unknown Param Rejection | `POST /api/summarize` with `{ userId: "user-bob" }` | HTTP 400 | HTTP 400 | **PASS** |
+| **Live API Backend** | Alice Chat Session | `POST /api/chat` (auth: alice) | HTTP 200 | HTTP 200 | **PASS** |
+| **Live API Backend** | Bob History Isolation | `GET /api/history` (auth: bob excludes Alice) | True | True | **PASS** |
