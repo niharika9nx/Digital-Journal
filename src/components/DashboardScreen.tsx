@@ -57,8 +57,8 @@ export const DashboardScreen: React.FC<DashboardProps> = ({ onNavigate, onSelect
       setFetchError(null);
       try {
         const [historyRes, insightsRes, firestoreData] = await Promise.all([
-          getHistory(user!.idToken, 10, 'all').catch(() => ({ sessions: [], summaries: [] })),
-          getInsights(user!.idToken).catch(() => null),
+          getHistory(user!.idToken, 10, 'all', user).catch(() => ({ sessions: [], summaries: [] })),
+          getInsights(user!.idToken, user).catch(() => null),
           !user!.isSandboxUser ? fetchHistoryFromFirestore(user!.uid, 10) : Promise.resolve(null),
         ]);
 

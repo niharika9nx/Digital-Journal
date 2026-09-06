@@ -45,7 +45,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
     setError(null);
     try {
       const [apiData, firestoreData] = await Promise.all([
-        getHistory(user.idToken, 50, 'all').catch(() => ({ sessions: [], summaries: [] })),
+        getHistory(user.idToken, 50, 'all', user).catch(() => ({ sessions: [], summaries: [] })),
         !user.isSandboxUser ? fetchHistoryFromFirestore(user.uid, 50) : Promise.resolve(null),
       ]);
 

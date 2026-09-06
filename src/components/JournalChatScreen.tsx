@@ -128,13 +128,17 @@ export const JournalChatScreen: React.FC<JournalChatScreenProps> = ({
     setReflectionError(null);
 
     try {
-      console.info('📡 [Journal Entry] Requesting AI summarization and server storage...');
-      const result = await postSummarize(user.idToken, {
-        content: cleanContent,
-        title: cleanTitle || undefined,
-        mood: selectedMood,
-        tags: tags.length > 0 ? tags : undefined,
-      });
+      console.info('📡 [Journal Entry] Requesting AI summarization and storage...');
+      const result = await postSummarize(
+        user.idToken,
+        {
+          content: cleanContent,
+          title: cleanTitle || undefined,
+          mood: selectedMood,
+          tags: tags.length > 0 ? tags : undefined,
+        },
+        user
+      );
 
       console.log('✅ [Journal Entry] Summarization received successfully:', {
         sessionId: result.entry?.id,
@@ -146,31 +150,13 @@ export const JournalChatScreen: React.FC<JournalChatScreenProps> = ({
       // Synchronize directly into Cloud Firestore database /users/{uid}/...
       if (!user.isSandboxUser) {
         console.info(
-          `💾 [Journal Entry] Commencing Firestore write operations to collection /users/${user.uid}/...`
+          `💾 [Journal Entry] Ensuring Firestore write operations to collection /users/${user.uid}/...`
         );
 
-        const [sessionWriteResult, summaryWriteResult] = await Promise.allSettled([
+        await Promise.allSettled([
           syncSessionToFirestore(user.uid, result.entry),
           syncSummaryToFirestore(user.uid, result.summary),
         ]);
-
-        // Evaluate Session Write
-        if (sessionWriteResult.status === 'fulfilled') {
-          if (sessionWriteResult.value.success) {
-            console.info(`✅ [Firestore Sync] Session ${result.entry.id} verified in Firestore.`);
-          } else {
-            console.info(`ℹ️ [Storage Note] Session stored via authenticated API.`);
-          }
-        }
-
-        // Evaluate Summary Write
-        if (summaryWriteResult.status === 'fulfilled') {
-          if (summaryWriteResult.value.success) {
-            console.info(`✅ [Firestore Sync] Summary ${result.summary.id} verified in Firestore.`);
-          } else {
-            console.info(`ℹ️ [Storage Note] Summary stored via authenticated API.`);
-          }
-        }
       } else {
         console.info(
           `ℹ️ [Journal Entry] Sandbox/Dev Account mode (${user.uid}). Saved in server memory.`
@@ -213,7 +199,7 @@ export const JournalChatScreen: React.FC<JournalChatScreenProps> = ({
     setChatError(null);
 
     try {
-      const response = await postChat(user.idToken, cleanMsg, conversationId);
+      const response = await postChat(user.idToken, cleanMsg, conversationId, user, updatedMessages);
       const activeConvId = conversationId || response.conversationId;
       if (!conversationId) {
         setConversationId(response.conversationId);

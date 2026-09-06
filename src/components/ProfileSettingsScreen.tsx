@@ -42,7 +42,7 @@ export const ProfileSettingsScreen: React.FC = () => {
     async function loadProfile() {
       setLoading(true);
       try {
-        const data = await getUserProfile(user!.idToken);
+        const data = await getUserProfile(user!.idToken, user);
         if (isMounted) {
           setProfile(data);
         }
@@ -84,7 +84,7 @@ export const ProfileSettingsScreen: React.FC = () => {
     setIsExporting(true);
     setActionNotice(null);
     try {
-      const exportObject = await exportUserData(user.idToken);
+      const exportObject = await exportUserData(user.idToken, user);
 
       const blob = new Blob([JSON.stringify(exportObject, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -109,7 +109,7 @@ export const ProfileSettingsScreen: React.FC = () => {
     setIsDeleting(true);
     setActionNotice(null);
     try {
-      await deleteUserHistory(user.idToken);
+      await deleteUserHistory(user.idToken, user);
       if (!user.isSandboxUser) {
         await deleteUserDataFromFirestore(user.uid);
       }

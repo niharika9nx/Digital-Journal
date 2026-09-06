@@ -114,27 +114,23 @@ async function secureFetch<T>(endpoint: string, options: ApiOptions): Promise<T>
 
   const contentType = response.headers.get('content-type') || '';
   const text = await response.text();
+  const trimmed = text.trim();
 
-  // If static hosting returned HTML for /api endpoint or non-JSON payload
-  if (!response.ok || !contentType.includes('application/json') || text.trim().startsWith('<')) {
-    if (text.trim().startsWith('<!doctype') || text.trim().startsWith('<html') || text.trim().startsWith('<') || response.status === 404) {
-      console.info('[API Notice] Static hosting intercepted /api route with HTML fallback. Executing direct client engine.');
-      throw new Error('BACKEND_UNAVAILABLE');
-    }
-    try {
-      const parsed = JSON.parse(text);
-      throw new Error(parsed.error || `Request failed with status ${response.status}`);
-    } catch (e: any) {
-      if (e.message !== 'BACKEND_UNAVAILABLE') {
-        throw new Error(`Server returned ${response.status}: ${text.slice(0, 100)}`);
-      }
-      throw e;
-    }
+  // If response is HTML or not valid JSON
+  if (
+    !response.ok ||
+    !contentType.includes('application/json') ||
+    trimmed.startsWith('<') ||
+    trimmed.toLowerCase().startsWith('<!doctype')
+  ) {
+    console.info('[API Notice] Received non-JSON or HTML response from backend. Falling back to direct client engine.');
+    throw new Error('BACKEND_UNAVAILABLE');
   }
 
   try {
     return JSON.parse(text) as T;
   } catch {
+    console.info('[API Notice] JSON parsing error from backend response. Falling back to direct client engine.');
     throw new Error('BACKEND_UNAVAILABLE');
   }
 }
@@ -159,23 +155,27 @@ export async function postChat(
       }),
     });
   } catch (err: any) {
-    if (err.message === 'BACKEND_UNAVAILABLE' || err.message?.includes('session expired') === false) {
-      const effectiveUser = getCurrentAuthUser(user);
-      let historicalSummaries: JournalSummary[] = [];
-      if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
+    if (err.message === 'Authentication session expired or invalid. Please sign in again.') {
+      throw err;
+    }
+    const effectiveUser = getCurrentAuthUser(user);
+    let historicalSummaries: JournalSummary[] = [];
+    if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
+      try {
         const firestoreData = await fetchHistoryFromFirestore(effectiveUser.uid, 5);
         if (firestoreData) {
           historicalSummaries = firestoreData.summaries;
         }
+      } catch (fErr) {
+        console.warn('Firestore history fetch warning:', fErr);
       }
-      const response = await clientGenerateChatResponse(message, history, historicalSummaries);
-      return {
-        reply: response.text,
-        conversationId: conversationId || `conv-${Date.now()}`,
-        retrievedSummaryCount: response.retrievedSummaryCount,
-      };
     }
-    throw err;
+    const response = await clientGenerateChatResponse(message, history, historicalSummaries);
+    return {
+      reply: response.text,
+      conversationId: conversationId || `conv-${Date.now()}`,
+      retrievedSummaryCount: response.retrievedSummaryCount,
+    };
   }
 }
 
@@ -199,50 +199,51 @@ export async function postSummarize(
       body: JSON.stringify(payload),
     });
   } catch (err: any) {
-    if (err.message === 'BACKEND_UNAVAILABLE' || err.message?.includes('session expired') === false) {
-      const effectiveUser = getCurrentAuthUser(user);
-      const summaryResult = await clientGenerateEntrySummary(payload.content, payload.title, payload.mood);
-      const now = new Date().toISOString();
-      const sessionId = `entry-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      const summaryId = `summary-${sessionId}`;
-
-      const entry: JournalSession = {
-        id: sessionId,
-        uid: effectiveUser.uid,
-        title: payload.title || 'Untitled Reflection',
-        content: payload.content,
-        mood: payload.mood || 'Reflective',
-        tags: payload.tags || [],
-        messages: [],
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      const summary: JournalSummary = {
-        id: summaryId,
-        sessionId,
-        uid: effectiveUser.uid,
-        summaryText: summaryResult.summaryText,
-        keyThemes: summaryResult.keyThemes,
-        emotionalValence: summaryResult.emotionalValence,
-        mood: summaryResult.mood,
-        createdAt: now,
-      };
-
-      // Direct write to Cloud Firestore
-      if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
-        await Promise.allSettled([
-          syncSessionToFirestore(effectiveUser.uid, entry),
-          syncSummaryToFirestore(effectiveUser.uid, summary),
-        ]);
-      }
-
-      return {
-        entry,
-        summary,
-      };
+    if (err.message === 'Authentication session expired or invalid. Please sign in again.') {
+      throw err;
     }
-    throw err;
+
+    const effectiveUser = getCurrentAuthUser(user);
+    const summaryResult = await clientGenerateEntrySummary(payload.content, payload.title, payload.mood);
+    const now = new Date().toISOString();
+    const sessionId = `entry-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const summaryId = `summary-${sessionId}`;
+
+    const entry: JournalSession = {
+      id: sessionId,
+      uid: effectiveUser.uid,
+      title: payload.title || 'Untitled Reflection',
+      content: payload.content,
+      mood: payload.mood || 'Reflective',
+      tags: payload.tags || [],
+      messages: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const summary: JournalSummary = {
+      id: summaryId,
+      sessionId,
+      uid: effectiveUser.uid,
+      summaryText: summaryResult.summaryText,
+      keyThemes: summaryResult.keyThemes,
+      emotionalValence: summaryResult.emotionalValence,
+      mood: summaryResult.mood,
+      createdAt: now,
+    };
+
+    // Direct write to Cloud Firestore
+    if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
+      await Promise.allSettled([
+        syncSessionToFirestore(effectiveUser.uid, entry),
+        syncSummaryToFirestore(effectiveUser.uid, summary),
+      ]);
+    }
+
+    return {
+      entry,
+      summary,
+    };
   }
 }
 
@@ -265,9 +266,12 @@ export async function getHistory(
       method: 'GET',
     });
   } catch (err: any) {
-    if (err.message === 'BACKEND_UNAVAILABLE' || err.message?.includes('session expired') === false) {
-      const effectiveUser = getCurrentAuthUser(user);
-      if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
+    if (err.message === 'Authentication session expired or invalid. Please sign in again.') {
+      throw err;
+    }
+    const effectiveUser = getCurrentAuthUser(user);
+    if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
+      try {
         const directData = await fetchHistoryFromFirestore(effectiveUser.uid, limit);
         if (directData) {
           return {
@@ -275,10 +279,11 @@ export async function getHistory(
             summaries: directData.summaries,
           };
         }
+      } catch (fErr) {
+        console.warn('Firestore history fetch warning:', fErr);
       }
-      return { sessions: [], summaries: [] };
     }
-    throw err;
+    return { sessions: [], summaries: [] };
   }
 }
 
@@ -292,28 +297,32 @@ export async function getUserProfile(token: string, user?: AuthUser | null): Pro
       method: 'GET',
     });
   } catch (err: any) {
-    if (err.message === 'BACKEND_UNAVAILABLE' || err.message?.includes('session expired') === false) {
-      const effectiveUser = getCurrentAuthUser(user);
-      let sessionsCount = 0;
-      let summariesCount = 0;
-      if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
+    if (err.message === 'Authentication session expired or invalid. Please sign in again.') {
+      throw err;
+    }
+    const effectiveUser = getCurrentAuthUser(user);
+    let sessionsCount = 0;
+    let summariesCount = 0;
+    if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
+      try {
         const directData = await fetchHistoryFromFirestore(effectiveUser.uid, 100);
         if (directData) {
           sessionsCount = directData.sessions.length;
           summariesCount = directData.summaries.length;
         }
+      } catch (fErr) {
+        console.warn('Firestore profile fetch warning:', fErr);
       }
-      return {
-        uid: effectiveUser.uid,
-        email: effectiveUser.email,
-        displayName: effectiveUser.displayName || 'Reflective Journaler',
-        createdAt: new Date().toISOString(),
-        sessionsCount,
-        summariesCount,
-        authProvider: 'firebase.google',
-      };
     }
-    throw err;
+    return {
+      uid: effectiveUser.uid,
+      email: effectiveUser.email,
+      displayName: effectiveUser.displayName || 'Reflective Journaler',
+      createdAt: new Date().toISOString(),
+      sessionsCount,
+      summariesCount,
+      authProvider: 'firebase.google',
+    };
   }
 }
 
@@ -327,133 +336,137 @@ export async function getInsights(token: string, user?: AuthUser | null): Promis
       method: 'GET',
     });
   } catch (err: any) {
-    if (err.message === 'BACKEND_UNAVAILABLE' || err.message?.includes('session expired') === false) {
-      const effectiveUser = getCurrentAuthUser(user);
-      let summaries: JournalSummary[] = [];
-      let sessions: JournalSession[] = [];
-      if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
+    if (err.message === 'Authentication session expired or invalid. Please sign in again.') {
+      throw err;
+    }
+    const effectiveUser = getCurrentAuthUser(user);
+    let summaries: JournalSummary[] = [];
+    let sessions: JournalSession[] = [];
+    if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
+      try {
         const direct = await fetchHistoryFromFirestore(effectiveUser.uid, 50);
         if (direct) {
           summaries = direct.summaries;
           sessions = direct.sessions;
         }
+      } catch (fErr) {
+        console.warn('Firestore insights fetch warning:', fErr);
       }
-
-      // Calculate valence trends
-      const valenceTimeline = summaries.map((s) => ({
-        date: s.createdAt.split('T')[0],
-        valence: s.emotionalValence || 0,
-        mood: s.mood || 'Reflective',
-        summaryPreview: s.summaryText.slice(0, 80) + '...',
-      }));
-
-      // Calculate mood distribution
-      const moodCounts: Record<string, number> = {};
-      summaries.forEach((s) => {
-        const m = s.mood || 'Reflective';
-        moodCounts[m] = (moodCounts[m] || 0) + 1;
-      });
-      const moodDistribution = Object.entries(moodCounts).map(([name, value]) => ({ name, value }));
-
-      // Calculate top themes
-      const themeCounts: Record<string, number> = {};
-      let totalThemeMentions = 0;
-      summaries.forEach((s) => {
-        (s.keyThemes || []).forEach((theme) => {
-          themeCounts[theme] = (themeCounts[theme] || 0) + 1;
-          totalThemeMentions++;
-        });
-      });
-      const topThemes: ThemeFrequencyItem[] = Object.entries(themeCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([theme, count]) => ({
-          theme,
-          count,
-          percentage: totalThemeMentions > 0 ? Math.round((count / totalThemeMentions) * 100) : 0,
-        }));
-
-      // Topic trends
-      const topicTrends: TopicTrendItem[] = Object.entries(themeCounts)
-        .slice(0, 5)
-        .map(([topic, count], idx) => ({
-          topic,
-          count,
-          trend: idx === 0 ? 'increasing' : idx === 1 ? 'emerging' : 'steady',
-        }));
-
-      // Activity timeline
-      const dateCounts: Record<string, { sessionsCount: number; wordCount: number }> = {};
-      sessions.forEach((s) => {
-        const d = s.createdAt.split('T')[0];
-        const words = (s.content || '').split(/\s+/).filter(Boolean).length;
-        if (!dateCounts[d]) {
-          dateCounts[d] = { sessionsCount: 0, wordCount: 0 };
-        }
-        dateCounts[d].sessionsCount += 1;
-        dateCounts[d].wordCount += words;
-      });
-      const activityTimeline = Object.entries(dateCounts).map(([date, val]) => ({
-        date,
-        rawDate: date,
-        sessionsCount: val.sessionsCount,
-        wordCount: val.wordCount,
-      }));
-
-      const averageValence =
-        summaries.length > 0
-          ? Number((summaries.reduce((sum, s) => sum + (s.emotionalValence || 0), 0) / summaries.length).toFixed(2))
-          : 0;
-
-      const personalizedInsights: PersonalizedAiInsight[] = [
-        {
-          category: 'Emotional Pattern',
-          title: averageValence >= 0.2 ? 'Positive Momentum' : 'Reflective Clarity',
-          description: `You have recorded ${summaries.length} reflections. Your journaling practice continues to build greater metacognitive balance and emotional awareness.`,
-          actionablePrompt: 'What is one moment from your day that you want to hold onto?',
-        },
-        {
-          category: 'Mindfulness Suggestion',
-          title: 'Daily Writing Cadence',
-          description: 'Regular daily journaling helps identify subtle changes in your well-being before stress accumulates.',
-          actionablePrompt: 'How can you give yourself 5 minutes of quiet time tomorrow morning?',
-        },
-      ];
-
-      return {
-        totalReflections: sessions.filter((s) => !s.messages || s.messages.length === 0).length,
-        totalSummaries: summaries.length,
-        averageValence,
-        moodDistribution,
-        valenceTimeline,
-        topThemes,
-        activityTimeline,
-        topicTrends,
-        frequencyPatterns: {
-          byDayOfWeek: [
-            { day: 'Mon', count: 1 },
-            { day: 'Tue', count: 0 },
-            { day: 'Wed', count: 2 },
-            { day: 'Thu', count: 1 },
-            { day: 'Fri', count: 2 },
-            { day: 'Sat', count: 1 },
-            { day: 'Sun', count: 1 },
-          ],
-          byTimeOfDay: [
-            { period: 'Morning', count: 2, label: '6am - 12pm' },
-            { period: 'Afternoon', count: 1, label: '12pm - 5pm' },
-            { period: 'Evening', count: 3, label: '5pm - 10pm' },
-            { period: 'Night', count: 1, label: '10pm - 6am' },
-          ],
-          currentStreak: sessions.length > 0 ? 1 : 0,
-          longestStreak: sessions.length > 0 ? 1 : 0,
-          mostActiveDay: 'Wednesday',
-          mostActivePeriod: 'Evening',
-        },
-        personalizedInsights,
-      };
     }
-    throw err;
+
+    // Calculate valence trends
+    const valenceTimeline = summaries.map((s) => ({
+      date: s.createdAt.split('T')[0],
+      valence: s.emotionalValence || 0,
+      mood: s.mood || 'Reflective',
+      summaryPreview: s.summaryText.slice(0, 80) + '...',
+    }));
+
+    // Calculate mood distribution
+    const moodCounts: Record<string, number> = {};
+    summaries.forEach((s) => {
+      const m = s.mood || 'Reflective';
+      moodCounts[m] = (moodCounts[m] || 0) + 1;
+    });
+    const moodDistribution = Object.entries(moodCounts).map(([name, value]) => ({ name, value }));
+
+    // Calculate top themes
+    const themeCounts: Record<string, number> = {};
+    let totalThemeMentions = 0;
+    summaries.forEach((s) => {
+      (s.keyThemes || []).forEach((theme) => {
+        themeCounts[theme] = (themeCounts[theme] || 0) + 1;
+        totalThemeMentions++;
+      });
+    });
+    const topThemes: ThemeFrequencyItem[] = Object.entries(themeCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([theme, count]) => ({
+        theme,
+        count,
+        percentage: totalThemeMentions > 0 ? Math.round((count / totalThemeMentions) * 100) : 0,
+      }));
+
+    // Topic trends
+    const topicTrends: TopicTrendItem[] = Object.entries(themeCounts)
+      .slice(0, 5)
+      .map(([topic, count], idx) => ({
+        topic,
+        count,
+        trend: idx === 0 ? 'increasing' : idx === 1 ? 'emerging' : 'steady',
+      }));
+
+    // Activity timeline
+    const dateCounts: Record<string, { sessionsCount: number; wordCount: number }> = {};
+    sessions.forEach((s) => {
+      const d = s.createdAt.split('T')[0];
+      const words = (s.content || '').split(/\s+/).filter(Boolean).length;
+      if (!dateCounts[d]) {
+        dateCounts[d] = { sessionsCount: 0, wordCount: 0 };
+      }
+      dateCounts[d].sessionsCount += 1;
+      dateCounts[d].wordCount += words;
+    });
+    const activityTimeline = Object.entries(dateCounts).map(([date, val]) => ({
+      date,
+      rawDate: date,
+      sessionsCount: val.sessionsCount,
+      wordCount: val.wordCount,
+    }));
+
+    const averageValence =
+      summaries.length > 0
+        ? Number((summaries.reduce((sum, s) => sum + (s.emotionalValence || 0), 0) / summaries.length).toFixed(2))
+        : 0;
+
+    const personalizedInsights: PersonalizedAiInsight[] = [
+      {
+        category: 'Emotional Pattern',
+        title: averageValence >= 0.2 ? 'Positive Momentum' : 'Reflective Clarity',
+        description: `You have recorded ${summaries.length} reflections. Your journaling practice continues to build greater metacognitive balance and emotional awareness.`,
+        actionablePrompt: 'What is one moment from your day that you want to hold onto?',
+      },
+      {
+        category: 'Mindfulness Suggestion',
+        title: 'Daily Writing Cadence',
+        description: 'Regular daily journaling helps identify subtle changes in your well-being before stress accumulates.',
+        actionablePrompt: 'How can you give yourself 5 minutes of quiet time tomorrow morning?',
+      },
+    ];
+
+    return {
+      totalReflections: sessions.filter((s) => !s.messages || s.messages.length === 0).length,
+      totalSummaries: summaries.length,
+      averageValence,
+      moodDistribution,
+      valenceTimeline,
+      topThemes,
+      activityTimeline,
+      topicTrends,
+      frequencyPatterns: {
+        byDayOfWeek: [
+          { day: 'Mon', count: 1 },
+          { day: 'Tue', count: 0 },
+          { day: 'Wed', count: 2 },
+          { day: 'Thu', count: 1 },
+          { day: 'Fri', count: 2 },
+          { day: 'Sat', count: 1 },
+          { day: 'Sun', count: 1 },
+        ],
+        byTimeOfDay: [
+          { period: 'Morning', count: 2, label: '6am - 12pm' },
+          { period: 'Afternoon', count: 1, label: '12pm - 5pm' },
+          { period: 'Evening', count: 3, label: '5pm - 10pm' },
+          { period: 'Night', count: 1, label: '10pm - 6am' },
+        ],
+        currentStreak: sessions.length > 0 ? 1 : 0,
+        longestStreak: sessions.length > 0 ? 1 : 0,
+        mostActiveDay: 'Wednesday',
+        mostActivePeriod: 'Evening',
+      },
+      personalizedInsights,
+    };
   }
 }
 
@@ -467,14 +480,14 @@ export async function deleteUserHistory(token: string, user?: AuthUser | null): 
       method: 'DELETE',
     });
   } catch (err: any) {
-    if (err.message === 'BACKEND_UNAVAILABLE' || err.message?.includes('session expired') === false) {
-      const effectiveUser = getCurrentAuthUser(user);
-      if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
-        await deleteUserDataFromFirestore(effectiveUser.uid);
-      }
-      return { success: true, message: 'All reflection records cleared successfully.' };
+    if (err.message === 'Authentication session expired or invalid. Please sign in again.') {
+      throw err;
     }
-    throw err;
+    const effectiveUser = getCurrentAuthUser(user);
+    if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
+      await deleteUserDataFromFirestore(effectiveUser.uid);
+    }
+    return { success: true, message: 'All reflection records cleared successfully.' };
   }
 }
 
@@ -488,35 +501,39 @@ export async function exportUserData(token: string, user?: AuthUser | null): Pro
       method: 'GET',
     });
   } catch (err: any) {
-    if (err.message === 'BACKEND_UNAVAILABLE' || err.message?.includes('session expired') === false) {
-      const effectiveUser = getCurrentAuthUser(user);
-      let sessions: JournalSession[] = [];
-      let summaries: JournalSummary[] = [];
-      if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
+    if (err.message === 'Authentication session expired or invalid. Please sign in again.') {
+      throw err;
+    }
+    const effectiveUser = getCurrentAuthUser(user);
+    let sessions: JournalSession[] = [];
+    let summaries: JournalSummary[] = [];
+    if (effectiveUser.uid && !effectiveUser.isSandboxUser) {
+      try {
         const direct = await fetchHistoryFromFirestore(effectiveUser.uid, 200);
         if (direct) {
           sessions = direct.sessions;
           summaries = direct.summaries;
         }
+      } catch (fErr) {
+        console.warn('Firestore export fetch warning:', fErr);
       }
-      return {
-        exportTimestamp: new Date().toISOString(),
-        schemaVersion: '1.0.0',
-        user: {
-          uid: effectiveUser.uid,
-          email: effectiveUser.email,
-          createdAt: new Date().toISOString(),
-        },
-        metadata: {
-          totalSessions: sessions.length,
-          totalSummaries: summaries.length,
-          exportType: 'full_personal_journal',
-          tenantBoundary: 'STRICTLY_ISOLATED_UID',
-        },
-        sessions,
-        summaries,
-      };
     }
-    throw err;
+    return {
+      exportTimestamp: new Date().toISOString(),
+      schemaVersion: '1.0.0',
+      user: {
+        uid: effectiveUser.uid,
+        email: effectiveUser.email,
+        createdAt: new Date().toISOString(),
+      },
+      metadata: {
+        totalSessions: sessions.length,
+        totalSummaries: summaries.length,
+        exportType: 'full_personal_journal',
+        tenantBoundary: 'STRICTLY_ISOLATED_UID',
+      },
+      sessions,
+      summaries,
+    };
   }
 }

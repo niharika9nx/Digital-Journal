@@ -76,7 +76,7 @@ export const InsightsScreen: React.FC = () => {
     setError(null);
 
     try {
-      const data = await getInsights(user.idToken);
+      const data = await getInsights(user.idToken, user);
       setInsights(data);
     } catch (err: any) {
       setError(err.message || 'Failed to aggregate personal insights.');
@@ -96,7 +96,7 @@ export const InsightsScreen: React.FC = () => {
     setExportSuccess(false);
 
     try {
-      const exportData = await exportUserData(user.idToken);
+      const exportData = await exportUserData(user.idToken, user);
       const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
         JSON.stringify(exportData, null, 2)
       )}`;
