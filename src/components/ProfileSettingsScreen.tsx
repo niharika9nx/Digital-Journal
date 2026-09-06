@@ -18,6 +18,7 @@ import {
   Loader2,
   FileJson,
   Shield,
+  Sparkles,
 } from 'lucide-react';
 import type { UserProfileResponse } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -362,6 +363,44 @@ export const ProfileSettingsScreen: React.FC = () => {
 
             <div className="p-4 rounded-2xl bg-[#1C1917] font-mono text-[#EBD8B8] text-xs break-all select-all max-h-24 overflow-y-auto leading-relaxed">
               {user?.idToken}
+            </div>
+          </div>
+
+          {/* Gemini AI Key Status & Direct Setup */}
+          <div className="bg-white rounded-3xl border border-[#EAE5DC] p-6 sm:p-8 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-serif font-normal text-[#1C1917] flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#A87B32]" />
+                <span>Gemini AI Engine Integration</span>
+              </h3>
+            </div>
+
+            <p className="text-xs text-[#78716C] font-light leading-relaxed">
+              When deployed purely on static Firebase Hosting, provide your Gemini API key (or set <code className="bg-[#FAF8F5] px-1.5 py-0.5 rounded font-mono text-[11px] text-[#1C1917] border border-[#EAE5DC]">VITE_GEMINI_API_KEY</code> in build env) for real-time AI conversation and entry synthesis.
+            </p>
+
+            <div className="flex gap-2">
+              <input
+                type="password"
+                placeholder="Enter your Gemini API key (AIzaSy...)"
+                defaultValue={typeof localStorage !== 'undefined' ? localStorage.getItem('gemini_api_key_custom') || '' : ''}
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  if (typeof localStorage !== 'undefined') {
+                    if (val) localStorage.setItem('gemini_api_key_custom', val);
+                    else localStorage.removeItem('gemini_api_key_custom');
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-[#EAE5DC] bg-[#FAF8F5] focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#8C857B] text-xs text-[#1C1917] font-mono"
+              />
+              <button
+                onClick={() => {
+                  setActionNotice({ type: 'success', message: 'Gemini API key configured. Real Gemini model responses are now active.' });
+                }}
+                className="px-4 py-2.5 rounded-xl bg-[#1C1917] text-[#FAF8F5] text-xs font-medium hover:bg-[#2B2724] transition cursor-pointer"
+              >
+                Save Key
+              </button>
             </div>
           </div>
 

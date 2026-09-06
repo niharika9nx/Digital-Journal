@@ -10,13 +10,25 @@ let aiClient: GoogleGenAI | null = null;
 
 function getClientGemini(): GoogleGenAI | null {
   if (!aiClient) {
-    // Check for client-side API key if configured
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (window as any).__GEMINI_API_KEY__;
+    // Check for client-side API key from env, window, or localStorage
+    const savedKey = typeof localStorage !== 'undefined' ? localStorage.getItem('gemini_api_key_custom') : null;
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (window as any).__GEMINI_API_KEY__ || savedKey;
     if (apiKey && apiKey !== 'MY_GEMINI_API_KEY' && apiKey.trim() !== '') {
-      aiClient = new GoogleGenAI({ apiKey });
+      aiClient = new GoogleGenAI({ apiKey: apiKey.trim() });
     }
   }
   return aiClient;
+}
+
+export function setCustomClientGeminiKey(key: string) {
+  if (typeof localStorage !== 'undefined') {
+    if (key.trim()) {
+      localStorage.setItem('gemini_api_key_custom', key.trim());
+    } else {
+      localStorage.removeItem('gemini_api_key_custom');
+    }
+  }
+  aiClient = key.trim() ? new GoogleGenAI({ apiKey: key.trim() }) : null;
 }
 
 const SYSTEM_INSTRUCTION_CHAT = `You are the Personal Gemini Journal reflective companion.
